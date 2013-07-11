@@ -24,6 +24,7 @@ References:
 var fs = require('fs');
 var cli = require('commander');
 var cheerio = require('cheerio');
+var rest = require('restler');
 
 var HTML_FILE_DEFAULT = "index.html";
 var CHECKS_FILE_DEFAULT = "checks.json";
@@ -64,15 +65,38 @@ var clone = function(fn) {
     return fn.bind({});
 };
 
+var check = function(htmlFile, checksFile) {
+    var result = checkHtmlFile(htmlFile, checksFile);
+    var outJson = JSON.stringify(result, null, 4);
+    console.log(outJson);
+};
+
 if(require.main == module) {
     cli
         .option('-c, --checks <check_file>', 'Path to checks.json', clone(assertFileExists), CHECKS_FILE_DEFAULT)
         .option('-f, --file <html_file>', 'Path to index.html', clone(assertFileExists), HTML_FILE_DEFAULT)
+        .option('-u, --url <url>', 'URl to fetch data from')
         .parse(process.argv);
 
-    var checkJson = checkHtmlFile(cli.file, cli.checks);
-    var outJson = JSON.stringify(checkJson, null, 4);
-    console.log(outJson);
+    var url = cli.url.toString();
+    var checkJson = "";
+
+    if(url.length === 0) {
+        check(cli.file, cli.checks);
+    }
+    else {
+        var tmpFile = './url.tmp';
+        rest.get(url).on('complete', function(result) {
+            if (result instanceof Error) {
+                console.log('Error: ' + result.message);
+            } else {                
+                console.log('Downloaded.');
+                fs.writeFileSync(tmpFile, result);
+                check(tmpFile, cli.checks);
+                fs.unlinkSync(tmpFile);
+            }
+        });
+    }
 } else {
     exports.checkHtmlFile = checkHtmlFile;
 }
